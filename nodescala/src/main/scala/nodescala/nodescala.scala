@@ -50,15 +50,22 @@ trait NodeScala {
     val listener = createListener(relativePath)
     val sub1 = listener.start()
     val sub2 = Future.run() { ct =>
-      val p = Promise[Unit]()
-      listener.nextRequest.onSuccess {
-        case (req, ex) => p.success(
-          blocking {
-            respond(ex, ct, handler(req))
+      def handleNextRequest(): Future[Unit] = {
+        if (ct.nonCancelled) {
+          listener.nextRequest.continueWith {
+            _.now match {
+              case (req, ex) => Future {
+                respond(ex, ct, handler(req))
+                handleNextRequest()
+              }
+            }
           }
-        )
+          Future.never
+        } else {
+          Future.always(null)
+        }
       }
-      p.future
+      handleNextRequest()
     }
     Subscription(sub1, sub2)
   }

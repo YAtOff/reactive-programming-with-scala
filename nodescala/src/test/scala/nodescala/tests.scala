@@ -1,5 +1,7 @@
 package nodescala
 
+import org.scalatest.concurrent.AsyncAssertions
+
 import scala.language.postfixOps
 import scala.util.{Try, Success, Failure}
 import scala.collection._
@@ -49,6 +51,22 @@ class NodeScalaSuite extends FunSuite {
     )
     val first: Future[Int] = Future.any(list)
     assert(Await.result(first, 1.1 seconds) == 1)
+  }
+
+  test("Future.continue should handle exceptions thrown by the user specified continuation function") {
+    val f = Future.always(1)
+    val c1 = f continue { _ => throw new UnsupportedOperationException("...") }
+    intercept[java.lang.UnsupportedOperationException] {
+      Await.result(c1, 1 second)
+    }
+  }
+
+  test("Future.continueWith should handle exceptions thrown by the user specified continuation function") {
+    val f = Future.always(1)
+    val c1 = f continueWith { _ => throw new UnsupportedOperationException("...") }
+    intercept[java.lang.UnsupportedOperationException] {
+      Await.result(c1, 1 second)
+    }
   }
 
   class DummyExchange(val request: Request) extends Exchange {
@@ -134,6 +152,45 @@ class NodeScalaSuite extends FunSuite {
 
 }
 
+class AsyncNodeScalaSuite extends FunSuite with AsyncAssertions {
+
+  test("A Future should be completed after 1s delay") {
+    val w = new Waiter
+    val start = System.currentTimeMillis()
+
+    Future.delay(1 second) onComplete { case _ =>
+      val duration = System.currentTimeMillis() - start
+      assert(duration >= 1000L)
+      assert(duration < 1100L)
+
+      w.dismiss()
+    }
+
+    w.await(timeout(2 seconds))
+  }
+
+  /*
+  test("Two sequential delays of 1s should delay by 2s") {
+    val w = new Waiter
+    val start = System.currentTimeMillis()
+
+    val combined = for {
+      f1 <- Future.delay(1 second)
+      f2 <- Future.delay(1 second)
+    } yield ()
+
+    combined onComplete { case _ =>
+      val duration = System.currentTimeMillis() - start
+      assert(duration >= 2000L)
+      assert(duration < 2100L)
+
+      w.dismiss()
+    }
+
+    w.await(timeout(3 seconds))
+  }
+  */
+}
 
 
 
