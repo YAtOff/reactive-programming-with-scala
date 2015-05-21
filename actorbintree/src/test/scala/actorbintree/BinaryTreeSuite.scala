@@ -115,7 +115,7 @@ class BinaryTreeSuite(_system: ActorSystem) extends TestKit(_system) with FunSui
 
     val requester = TestProbe()
     val topNode = system.actorOf(Props[BinaryTreeSet])
-    val count = 1000
+    val count = 10000
 
     val ops = randomOperations(requester.ref, count)
     val expectedReplies = referenceReplies(ops)
@@ -133,17 +133,51 @@ class BinaryTreeSuite(_system: ActorSystem) extends TestKit(_system) with FunSui
     topNode ! Insert(testActor, id = 1, 1)
     topNode ! Contains(testActor, id = 2, 1)
     topNode ! Remove(testActor, id = 3, 1)
+    topNode ! Insert(testActor, id = 4, 2)
+    topNode ! Contains(testActor, id = 5, 2)
 
     expectMsg(OperationFinished(1))
     expectMsg(ContainsResult(2, true))
     expectMsg(OperationFinished(3))
+    expectMsg(OperationFinished(4))
+    expectMsg(ContainsResult(5, true))
 
     topNode ! GC
 
     topNode ! Insert(testActor, id = 1, 1)
     topNode ! Contains(testActor, id = 2, 1)
+    topNode ! Contains(testActor, id = 3, 2)
+
+    expectMsg(OperationFinished(1))
+    expectMsg(ContainsResult(3, true))
+    expectMsg(ContainsResult(2, true))
+  }
+
+  test("test insert 0") {
+    val topNode = system.actorOf(Props[BinaryTreeSet])
+
+    topNode ! Insert(testActor, id = 1, 0)
+    topNode ! Contains(testActor, id = 2, 0)
 
     expectMsg(OperationFinished(1))
     expectMsg(ContainsResult(2, true))
+  }
+
+  test("insert after remove") {
+    val topNode = system.actorOf(Props[BinaryTreeSet])
+
+    topNode ! Insert(testActor, id = 1, 1)
+    topNode ! Contains(testActor, id = 2, 1)
+    topNode ! Remove(testActor, id = 3, 1)
+    topNode ! Contains(testActor, id = 4, 1)
+    topNode ! Insert(testActor, id = 5, 1)
+    topNode ! Contains(testActor, id = 6, 1)
+
+    expectMsg(OperationFinished(1))
+    expectMsg(ContainsResult(2, true))
+    expectMsg(OperationFinished(3))
+    expectMsg(ContainsResult(4, false))
+    expectMsg(OperationFinished(5))
+    expectMsg(ContainsResult(6, true))
   }
 }
