@@ -47,6 +47,8 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
   var replicators = Set.empty[ActorRef]
   var keySeq = Map.empty[String, Long]
 
+  var persistence = context.system.actorOf(persistenceProps)
+
 
   override def preStart(): Unit = {
     arbiter ! Join
@@ -83,9 +85,19 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
           case Some(v) => kv += (k -> v)
           case None => kv -= k
         }
-        sender ! SnapshotAck(k, seq)
+        secondaries += (self -> sender)
+        val persist = Persist(k, vo, seq)
+        persistence ! persist
+        context.system.scheduler.scheduleOnce(100.milliseconds, self, persist)
         keySeq += (k -> (seq + 1L))
       }
+    }
+    case persist: Persist => {
+      persistence ! persist
+      context.system.scheduler.scheduleOnce(100.milliseconds, self, persist)
+    }
+    case Persisted(k, id) => {
+      secondaries(self) ! SnapshotAck(k, id)
     }
   }
 
