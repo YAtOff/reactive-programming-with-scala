@@ -39,7 +39,21 @@ class Replicator(val replica: ActorRef) extends Actor {
   
   /* TODO Behavior for the Replicator. */
   def receive: Receive = {
-    case _ =>
+    case request @ Replicate(k, vo, id) => {
+      val seq = nextSeq
+      acks += (seq -> (sender, request))
+      val snapshot = Snapshot(k, vo, seq)
+      replica ! snapshot
+      context.system.scheduler.scheduleOnce(100.milliseconds, self, snapshot)
+    }
+    case snapshot: Snapshot => {
+      replica ! snapshot
+      context.system.scheduler.scheduleOnce(100.milliseconds, self, snapshot)
+    }
+    case SnapshotAck(k, seq) => {
+      val (requester, request) = acks(seq)
+      requester ! Replicated(k, request.id)
+    }
   }
 
 }
