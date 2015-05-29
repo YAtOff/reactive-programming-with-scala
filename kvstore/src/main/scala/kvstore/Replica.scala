@@ -45,6 +45,7 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
   var secondaries = Map.empty[ActorRef, ActorRef]
   // the current set of replicators
   var replicators = Set.empty[ActorRef]
+  var keySeq = Map.empty[String, Long]
 
 
   override def preStart(): Unit = {
@@ -73,6 +74,19 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
 
   val replica: Receive = {
     case Get(k, id) => sender ! GetResult(k, kv.get(k), id)
+    case Snapshot(k, vo, seq) => {
+      val expectedSeq = keySeq.getOrElse(k, 0L)
+      if (seq < expectedSeq) {
+        sender ! SnapshotAck(k, seq)
+      } else if (seq == expectedSeq) {
+        vo match {
+          case Some(v) => kv += (k -> v)
+          case None => kv -= k
+        }
+        sender ! SnapshotAck(k, seq)
+        keySeq += (k -> (seq + 1L))
+      }
+    }
   }
 
 }
